@@ -3,8 +3,10 @@ import torch
 from torch.utils.data import DataLoader
 import torch.optim as optim
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
-from model.net import SSNet
+
+from model.net import SSNetljl;aksdj f
 from dataloader import SaliconCoCoDataset
 from model.loss import multi_seg_loss_fusion, multi_bce_loss_fusion
 
@@ -15,11 +17,15 @@ EPOCH = 3
 EVAL_EPOCH = 1
 FREEZE_SEG = True
 LOG_INTERVAL = 3
+TENSORBOARD_DIR = './logs/'
 
 LR = 1e-3
 WEIGHT_DECAY = 0.01
 SCHEDULER_STEP_SIZE = 10
 SCHEDULER_GAMMA = 0.1
+
+# Tensorboard
+writer = SummaryWriter(log_dir=TENSORBOARD_DIR)
 
 ## dataset 
 dataset_folder = "../data/"
@@ -72,6 +78,8 @@ for epoch in range(EPOCH):
         
         epoch_loss_sal += last_sal_loss.item() # Record
         cum_loss_sal += sum_sal_loss.item() # Record
+        writer.add_scalar("Loss/sal", last_sal_loss.item(), batch_count)
+        writer.add_scalar("Loss/sal_total", sum_sal_loss.item(), batch_count)
         
         if not FREEZE_SEG:
             last_seg_loss, sum_seg_loss = multi_bce_loss_fusion(seg_out[0], seg_out[1],seg_out[2],seg_out[3],seg_out[4],seg_out[5],seg_out[6], seg_map)
@@ -79,6 +87,9 @@ for epoch in range(EPOCH):
 
             epoch_loss_seg += last_seg_loss.item() # Record
             cum_loss_seg += sum_seg_loss.item() # Record
+            writer.add_scalar("Loss/seg", last_seg_loss.item(), batch_count)
+            writer.add_scalar("Loss/seg_total", sum_seg_loss.item(), batch_count)
+        
 
         loss.backward()
         optimizer.step()
@@ -90,7 +101,13 @@ for epoch in range(EPOCH):
             cum_loss_seg = 0.0
             
     # print EPOCH Progress
-    print(f"[EPOCH {epoch:5d}] sal_loss: {epoch_loss_sal/len(train_dataset)} seg_loss: {epoch_loss_seg/len(train_dataset)}")
+    epoch_loss_sal = epoch_loss_sal/len(train_dataset)
+    epoch_loss_seg = epoch_loss_seg/len(train_dataset)
+    print(f"[EPOCH {epoch:5d}] sal_loss: {epoch_loss_sal} seg_loss: {epoch_loss_seg}")
+    writer.add_scalar("Train/batch_sal", epoch_loss_sal, epoch)
+    writer.add_scalar("Train/batch_seg", epoch_loss_seg, epoch)
+    epoch_loss_sal = 0.0
+    epoch_loss_seg = 0.0
 
     if epoch % EVAL_EPOCH == 0:
         model.eval()
@@ -108,6 +125,8 @@ for epoch in range(EPOCH):
         val_loss_seg = val_loss_seg/len(train_dataset)
         total_loss = val_loss_sal + val_loss_seg
         print(f"[EVAL {epoch:5d}] sal_loss: {val_loss_sal} seg_loss: {val_loss_seg} total: {total_loss}")
+        writer.add_scalar("Val/batch_sal", val_loss_sal, epoch)
+        writer.add_scalar("Val/batch_seg", val_loss_seg, epoch)
         val_loss_sal = 0
         val_loss_seg = 0
         
