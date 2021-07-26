@@ -23,12 +23,12 @@ SCHEDULER_GAMMA = 0.1
 
 ## dataset 
 dataset_folder = "../data/"
-train_txt_path = "./train_list.txt"
+train_txt_path = "./dataset/train_list.txt"
 train_img_list = np.loadtxt(train_txt_path, dtype=str)[:5]
 train_dataset = SaliconCoCoDataset(dataset_folder, train_img_list)
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 
-val_txt_path = "./train_list.txt"
+val_txt_path = "./dataset/val_list.txt"
 val_img_list = np.loadtxt(val_txt_path, dtype=str)[:3]
 val_dataset = SaliconCoCoDataset(dataset_folder, val_img_list)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
