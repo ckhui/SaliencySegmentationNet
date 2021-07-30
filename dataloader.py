@@ -9,19 +9,21 @@ from albumentations.pytorch import ToTensorV2
 import cv2
 
 class SaliconCoCoDataset(Dataset):
-    def __init__(self,dataset_folder, img_name_list, size=256, transform=None):
+    def __init__(self,dataset_folder, img_name_list, size=256, transform=None, infer_mode=False):
         self.root = dataset_folder
         self.img_list = img_name_list
         self.transform = transform
 
 
+        p_pad = 0 if infer_mode else 1
+        
         self.map_transfrom= A.Compose([
             A.ToFloat(p=1),
             A.LongestMaxSize(max_size=size, p=1),
             A.PadIfNeeded(
                 min_height=size, min_width=size, 
                 border_mode=cv2.BORDER_CONSTANT, value=(0,0,0), mask_value=(0), 
-                p=1),
+                p=p_pad),
             ToTensorV2(p=1),
         ])
 
@@ -34,7 +36,7 @@ class SaliconCoCoDataset(Dataset):
             A.PadIfNeeded(
                 min_height=size, min_width=size, 
                 border_mode=cv2.BORDER_CONSTANT, value=(0,0,0), mask_value=(0), 
-                p=1),
+                p=p_pad),
             ToTensorV2(p=1),
         ])    
 
