@@ -85,7 +85,7 @@ def saliency2peaks(sal_input: Mat) -> np.ndarray:
         if len(peak) > 0:
             peaks.append(peak[0])
 
-    return np.array(peaks, dtype=np.uint8)
+    return np.array(peaks, dtype=int)
 
 def peaks2rect(peaks: np.ndarray, seg: Mat) -> Dict[Point, Rect]:
     """ match each peaks to a object blob
@@ -106,7 +106,7 @@ def peaks2rect(peaks: np.ndarray, seg: Mat) -> Dict[Point, Rect]:
     for p in peaks:
         points = np.array([[ [ p[1], p[0]] ]])
         for c in seg_contours:
-            dist = cv2.pointPolygonTest(c, (p[1], p[0]), measureDist=True)
+            dist = cv2.pointPolygonTest(c, (int(p[1]), int(p[0])), measureDist=True)
             # store all point with dist > -10, include the peak -> get the bounding box
             if dist > -10:
                 points = np.vstack([points,c])
@@ -139,10 +139,8 @@ def get_peaksBB(seg: Mat, sal: Mat) -> Dict[Point, Rect]:
     Returns:
         Dict[Point, Rect]: mapping for peak point to corresponding rect
     """
-    seg_uint8 = mask_to_uint8(seg)
-    sal_uint8 = mask_to_uint8(sal)
-    peaks = saliency2peaks(sal_uint8)
-    peaks_bb = peaks2rect(peaks, seg_uint8)
+    peaks = saliency2peaks(sal)
+    peaks_bb = peaks2rect(peaks, seg)
 
     return peaks_bb
 
@@ -258,6 +256,7 @@ def rank_xyxy(candidate_xyxy: List[Rect], sal: Mat, seg: Mat) -> ScoreRect:
         ScoreRect: Ranked Score_Rect
     """
     sal_norm = normalize_salmap(sal)
+    seg_norm = normalize_salmap(seg)
     scores_xyxy = []
     for xyxy in candidate_xyxy:
         x1,y1,x2,y2 = xyxy
@@ -266,7 +265,7 @@ def rank_xyxy(candidate_xyxy: List[Rect], sal: Mat, seg: Mat) -> ScoreRect:
         sal_partial = sal_norm[y1:y2, x1:x2]
         score_sal = np.power(sal_partial, 2).sum() / area
 
-        seg_partial = seg[y1:y2, x1:x2]
+        seg_partial = seg_norm[y1:y2, x1:x2]
         score_seg = seg_partial.sum() / area
         total = score_sal * score_seg
         # print("sal",score_sal, "seg", score_seg, total)

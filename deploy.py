@@ -2,8 +2,11 @@ import os
 from typing import Tuple
 import numpy as np
 import torch
+import cv2
+import base64
 from model.net import SSNet
-from image_helper import image2tensor, mask_to_uint8, saliency2peaks, get_peaksBB, get_candidate_bb, rank_xyxy, project_to_crop_size
+from image_helper import image2tensor, mask_to_uint8, get_peaksBB, get_candidate_bb, rank_xyxy, project_to_crop_size
+
 
 Size = Tuple[int, int]
 Mat = np.ndarray
@@ -21,8 +24,11 @@ def loadModel(path: str, device: torch.device) -> SSNet:
 def postprocess_res2numpy(seg: torch.Tensor, sal: torch.Tensor) -> Tuple[Mat, Mat]:
     seg_np = seg[0,0].cpu().detach().numpy()
     sal_np = 1 - sal[0,0].cpu().detach().numpy()
+
+    seg_uint8 = mask_to_uint8(seg_np)
+    sal_uint8 = mask_to_uint8(sal_np)
     
-    return seg_np, sal_np
+    return seg_uint8, sal_uint8
 
 def model_predict(model: SSNet, img: Mat) -> Tuple[Mat, Mat]:
     img_tensor = image2tensor(img)
@@ -75,3 +81,15 @@ def predict_crop(model: SSNet, img: Mat, crop_size: Size):
 
     return scores_xyxy, peaks_bb, seg, sal
 
+
+def toSalSegBase64(sal: Mat, seg: Mat) -> str:
+    """ merge sal seg into 1 3-channel image with R: padding, G: SEG, B: SAL and convert to base64
+
+    Returns:
+        str: base64 image string
+    """
+    pad = np.zeros_like(sal)
+    salseg = np.stack([sal, seg, pad], axis=2)
+    retval, buffer_img= cv2.imencode('.jpg', salseg)
+    b64 = base64.b64encode(buffer_img).decode("utf-8")
+    return b64
