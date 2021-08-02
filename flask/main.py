@@ -145,7 +145,7 @@ if __name__ == '__main__':
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')    
     # MODEL_WEIGHT = "../../weights/SSNET_best.pth"
     MODEL_WEIGHT = "../../weights/SSNET_ss_0.pth"
-    # MODEL = loadModel(MODEL_WEIGHT, DEVICE)
+    MODEL = loadModel(MODEL_WEIGHT, DEVICE)
     print("Starting Server - Model Loaded")
     
     print("Server Started")
