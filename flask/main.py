@@ -12,7 +12,7 @@ from io import BytesIO
 from flask import Flask
 from flask import request
 
-from deploy import loadModel, model_predict, get_peaksBB, predict_crop, toSalSegBase64
+from deploy import loadModel, model_predict, get_peaksBB, crop, toSalSegBase64, crop_b64, filter_candidate, project_to_crop_size
 
 app = Flask(__name__)
 
@@ -50,7 +50,7 @@ def predict():
             res_data['err'] = msg
             return response_builder(res_data)
         res_data['img_info'] = msg
-        sal, seg = model_predict(MODEL, image)
+        seg, sal = model_predict(MODEL, image)
         salseg = toSalSegBase64(sal,seg)
         res_data['sal_seg'] = salseg
         peaks_bb = get_peaksBB(seg, sal)
@@ -60,12 +60,33 @@ def predict():
             } for (p,bb) in peaks_bb.items()]
             
         res_data['peaks_bb'] = peaks_data
+
+        # crop
+        # scores_xyxy = filter_candidate(scores_xyxy, 0.1)
+        # project_to_crop_size(scores_xyxy, target_size, crop_size)
+        
         end = time.time()
         res_data['time'] = end-start
+
 
         return response_builder(res_data)
     else:
         return 
+
+@app.route('/sscrop', methods=['POST'])
+def sscrop():
+    if request.method == 'POST':
+        # get seg sal # base64
+        # get peaks_bb # array
+        # get src_size, crop_size calculate targetsize
+        
+        # h,w,_ = img.shape
+        # h_feat, w_feat = seg.shape
+        # target_size = calculate_target_feature_size((w,h), (w_feat,h_feat), crop_size)
+        # scores_xyxy = crop(sal, seg, peaks_bb)
+        res = {}
+        return response_builder(res)
+
 
 if __name__ == '__main__':
     print("Starting Server - Loading Model")
