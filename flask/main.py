@@ -46,80 +46,90 @@ def test():
 
 @app.route('/sspredict', methods=['POST'])
 def predict():
-    if request.method == 'POST':
-        res_data = {}
-        start = time.time()
-        if "input" not in request.files:
-            res_data['err'] = "Input Error"
+    try: 
+        if request.method == 'POST':
+            res_data = {}
+            start = time.time()
+            if "input" not in request.files:
+                res_data['err'] = "Input Error"
+                return response_builder(res_data)
+
+            crop_w = request.form.get('crop_w', 0)
+            crop_h = request.form.get('crop_h', 0)
+            if crop_w == 0 or crop_h == 0:
+                res_data['err'] = "Invalid Crop Size, crop size cannot be zero"
+                return response_builder(res_data)
+            crop_size = (int(crop_w), int(crop_h))
+
+
+            img_bytes = request.files["input"].read()
+            image, msg = read_image_from_bytes(img_bytes)
+            if image is None:
+                res_data['err'] = msg
+                return response_builder(res_data)
+            res_data['img_info'] = msg
+            seg, sal = model_predict(MODEL, image)
+            salseg = toSalSegBase64(sal,seg)
+            res_data['sal_seg'] = salseg
+            peaks_bb = get_peaksBB(seg, sal)
+            res_data['peaks_bb'] = peak2json(peaks_bb)
+
+            # crop
+            h,w,_ = image.shape
+            h_feat, w_feat = seg.shape
+            target_size = calculate_target_feature_size((w,h), (w_feat,h_feat), crop_size)
+            scores_xyxy = crop(sal, seg, peaks_bb, target_size)
+            scores_xyxy = filter_candidate(scores_xyxy, 0.1)
+            scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size)
+            res_data['results'] = score2json(scores_xyxy)
+            
+            end = time.time()
+            res_data['time'] = end-start
+
+
             return response_builder(res_data)
-
-        crop_w = request.form.get('crop_w', 0)
-        crop_h = request.form.get('crop_h', 0)
-        if crop_w == 0 or crop_h == 0:
-            res_data['err'] = "Invalid Crop Size, crop size cannot be zero"
-            return response_builder(res_data)
-        crop_size = (int(crop_w), int(crop_h))
-
-
-        img_bytes = request.files["input"].read()
-        image, msg = read_image_from_bytes(img_bytes)
-        if image is None:
-            res_data['err'] = msg
-            return response_builder(res_data)
-        res_data['img_info'] = msg
-        seg, sal = model_predict(MODEL, image)
-        salseg = toSalSegBase64(sal,seg)
-        res_data['sal_seg'] = salseg
-        peaks_bb = get_peaksBB(seg, sal)
-        res_data['peaks_bb'] = peak2json(peaks_bb)
-
-        # crop
-        h,w,_ = image.shape
-        h_feat, w_feat = seg.shape
-        target_size = calculate_target_feature_size((w,h), (w_feat,h_feat), crop_size)
-        scores_xyxy = crop(sal, seg, peaks_bb, target_size)
-        scores_xyxy = filter_candidate(scores_xyxy, 0.1)
-        scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size)
-        res_data['results'] = score2json(scores_xyxy)
-        
-        end = time.time()
-        res_data['time'] = end-start
-
-
-        return response_builder(res_data)
-    else:
-        return 
+    except Exception as err:
+        return response_builder({'err': str(err)})
 
 @app.route('/sscrop', methods=['POST'])
 def sscrop():
-    if request.method == 'POST':
-        res_data = {}
-        #  param check 
-        for k in ['sal_seg', 'peak_bb', 'img_w', 'img_h', 'crop_w', 'crop_h']:
-            if k not in request.json:
-                res_data['err'] = f"Missing Param [{k}]"
+    try:
+        if request.method == 'POST':
+            res_data = {}
+            #  param check 
+            start = time.time()
+            for k in ['sal_seg', 'peak_bb', 'img_w', 'img_h', 'crop_w', 'crop_h']:
+                if k not in request.json:
+                    res_data['err'] = f"Missing Param [{k}]"
+                    return response_builder(res_data)
+
+            seg_sal_b64 = request.json['sal_seg']
+            peaks_json = request.json['peak_bb']
+            peaks_bb = read_peaksjson(peaks_json)
+            img_w = int(request.json['img_w'])
+            img_h = int(request.json['img_h'])
+            crop_w = int(request.json['crop_w'])
+            crop_h = int(request.json['crop_h'])
+            if crop_w == 0 or crop_h == 0:
+                res_data['err'] = "Invalid Crop Size, crop size cannot be zero"
                 return response_builder(res_data)
+            img_size = (img_w, img_h)
+            crop_size = (crop_w, crop_h)
+            
+            seg_sal_b64 = seg_sal_b64.split(',')[-1]
+            sal, seg  = decodeSalSegBase64(seg_sal_b64)
+            h_feat, w_feat = seg.shape
+            target_size = calculate_target_feature_size(img_size, (w_feat,h_feat), crop_size)
+            scores_xyxy = crop(sal, seg, peaks_bb, target_size)
+            scores_xyxy = filter_candidate(scores_xyxy, 0.1)
+            scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size)
+            res_data['results'] = score2json(scores_xyxy)
 
-        seg_sal_b64 = request.json['sal_seg']
-        peaks_json = request.json['peak_bb']
-        peaks_bb = read_peaksjson(peaks_json)
-        img_w = int(request.json['img_w'])
-        img_h = int(request.json['img_h'])
-        crop_w = int(request.json['crop_w'])
-        crop_h = int(request.json['crop_h'])
-        img_size = (img_w, img_h)
-        crop_size = (crop_w, crop_h)
-        
-        seg_sal_b64 = seg_sal_b64.split(',')[-1]
-        sal, seg  = decodeSalSegBase64(seg_sal_b64)
-        h_feat, w_feat = seg.shape
-        target_size = calculate_target_feature_size(img_size, (w_feat,h_feat), crop_size)
-        scores_xyxy = crop(sal, seg, peaks_bb, target_size)
-        scores_xyxy = filter_candidate(scores_xyxy, 0.1)
-        scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size)
-        res_data['results'] = score2json(scores_xyxy)
-
-        return response_builder(res_data)
+            end = time.time()
+            res_data['time'] = end-start
+            return response_builder(res_data)
+    except Exception as err:
+        return response_builder({'err': str(err)})
 
 def read_peaksjson(peaks_json):
     return {tuple(p['peak']) : p['rect'] for p in peaks_json }
