@@ -5,7 +5,7 @@ import torch
 import cv2
 import base64
 from model.net import SSNet
-from image_helper import image2tensor, mask_to_uint8, get_peaksBB, get_candidate_bb, rank_xyxy, project_to_crop_size
+from image_helper import image2tensor, mask_to_uint8, normalize_salmap, get_peaksBB, get_candidate_bb, rank_xyxy, project_to_crop_size
 
 
 Size = Tuple[int, int]
@@ -81,15 +81,28 @@ def predict_crop(model: SSNet, img: Mat, crop_size: Size):
 
     return scores_xyxy, peaks_bb, seg, sal
 
-
 def toSalSegBase64(sal: Mat, seg: Mat) -> str:
     """ merge sal seg into 1 3-channel image with R: padding, G: SEG, B: SAL and convert to base64
 
     Returns:
         str: base64 image string
     """
-    pad = np.zeros_like(sal)
-    salseg = np.stack([sal, seg, pad], axis=2)
-    retval, buffer_img= cv2.imencode('.jpg', salseg)
-    b64 = base64.b64encode(buffer_img).decode("utf-8")
+    sal_norm = mask_to_uint8(normalize_salmap(sal.copy()))
+    salseg = np.stack([sal, seg, sal_norm], axis=2)
+    retval, buffer_img= cv2.imencode('.png', salseg)
+    im_bytes = buffer_img.tobytes()
+    b64 = base64.b64encode(im_bytes).decode("utf-8")
     return b64
+
+def decodeSalSegBase64(b64: str) -> Tuple[Mat, Mat]:
+    im_bytes = base64.b64decode(b64)
+    im_arr = np.frombuffer(im_bytes, dtype=np.uint8)
+    img = cv2.imdecode(im_arr, -1)
+    sal_img = img[:,:,0]
+    seg_img = img[:,:,1]
+    return  sal_img, seg_img
+
+def crop_b64(b64: str, peaks_bb: np.ndarray, target_size: Size) -> np.ndarray:
+    sal, seg = decodeSalSegBase64(b64)
+    scores_xyxy = crop(sal, seg, peaks_bb, target_size)
+    return scores_xyxy
