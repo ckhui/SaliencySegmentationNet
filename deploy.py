@@ -37,21 +37,30 @@ def model_predict(model: SSNet, img: Mat) -> Tuple[Mat, Mat]:
 
     return seg, sal
 
-def crop(sal: Mat, seg: Mat, peaks_bb: np.ndarray, target_size: Size) -> np.ndarray:
+def crop(sal: Mat, seg: Mat, peaks_bb: np.ndarray, target_size: Size, img_size: Size) -> np.ndarray:
     h_feat, w_feat = seg.shape
-    max_size = (w_feat, h_feat)
-    candidate_xyxy = get_candidate_bb(peaks_bb, target_size, max_size)
+    feat_size = (w_feat, h_feat)
+    candidate_xyxy = get_candidate_bb(peaks_bb, target_size, img_size, feat_size)
     scores_xyxy = rank_xyxy(candidate_xyxy, sal, seg)
     return scores_xyxy
 
-def calculate_target_feature_size(img_size: Size, feature_size:Size, crop_size:Size) -> Size:
+# def calculate_target_feature_size(img_size: Size, feature_size:Size, crop_size:Size) -> Size:
+#     w, h = img_size
+#     w_feat, h_feat = feature_size
+#     w_ratio = w / w_feat
+#     h_ratio = h / h_feat
+#     print(w_ratio, h_ratio)
+#     crop_w, crop_h = crop_size
+
+#     target_size = (int(crop_w / w_ratio), int(crop_h / h_ratio))
+#     return target_size
+
+def calculate_target_feature_size_256(img_size: Size, crop_size:Size) -> Size:
     w, h = img_size
-    w_feat, h_feat = feature_size
-    w_ratio = w / w_feat
-    h_ratio = h / h_feat
+    ratio = max(w,h) / 256
     crop_w, crop_h = crop_size
 
-    target_size = (int(crop_w / w_ratio), int(crop_h / h_ratio))
+    target_size = (int(crop_w / ratio), int(crop_h / ratio))
     return target_size
 
 def filter_candidate(scores_xyxy: np.ndarray, alpha: int = 0.1) -> np.ndarray:
@@ -68,16 +77,17 @@ def predict_crop(model: SSNet, img: Mat, crop_size: Size):
 
     ## Sizing
     h,w,_ = img.shape
-    h_feat, w_feat = seg.shape
-    target_size = calculate_target_feature_size((w,h), (w_feat,h_feat), crop_size)
+    img_size = (w,h)
+    # target_size = calculate_target_feature_size((w,h), (w_feat,h_feat), crop_size)
+    target_size = calculate_target_feature_size_256((w,h), crop_size)
 
     ## Cropping
-    scores_xyxy = crop(sal, seg, peaks_bb, target_size)
+    scores_xyxy = crop(sal, seg, peaks_bb, target_size, img_size)
     ## filter low score 
     scores_xyxy = filter_candidate(scores_xyxy, 0.1)
     
     ## Cropping postprocessing
-    scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size)
+    scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size, img_size)
 
     return scores_xyxy, peaks_bb, seg, sal
 

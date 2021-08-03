@@ -19,6 +19,10 @@ TRANSFORM = A.Compose([
                 std = (0.229, 0.224, 0.225),
                 p=1),
             A.LongestMaxSize(max_size=256, p=1),
+            A.PadIfNeeded(
+                min_height=256, min_width=256, 
+                border_mode=cv2.BORDER_CONSTANT, value=(0,0,0), mask_value=(0), 
+                p=1),
             ToTensorV2(p=1),
         ])    
 
@@ -177,18 +181,28 @@ def refine_saliency_aware_xyxy(center: Point, bb: Rect, target_size: Size) -> Re
 
     return cen_x-fill_x1, cen_y-fill_y1, cen_x+fill_x2, cen_y+fill_y2
 
-def refine_boundary_aware_xyxy(xyxy: Rect, max_size: Size) -> Rect:
+
+def get_rescaled_offset(feat_size: Size, img_size: Size) -> Tuple[int, int]:
+    ratio = max(img_size[0] / feat_size[0], img_size[1] / feat_size[1])
+    scaled_feat_size = int(img_size[0] / ratio), int(img_size[1] / ratio)
+    off_x = (feat_size[0] - scaled_feat_size[0]) // 2
+    off_y = (feat_size[1] - scaled_feat_size[1]) // 2
+    return (off_x, off_y)
+
+def refine_boundary_aware_xyxy(xyxy: Rect, feat_size: Size, img_size: Size) -> Rect:
     """ refine rect within image boundary
 
     Args:
         xyxy (Rect): rect in [xyxy]
-        max_size (Size): image boundary
+        feat_size (Size): feature boundary
+        img_size (Size): original image size
 
     Returns:
         Rect: refined rect
     """
+
     x1,y1,x2,y2 = xyxy
-    w, h = max_size
+    w, h = feat_size
     diff_x = x2-w
     if diff_x > 0:
         x2 -= diff_x
@@ -207,15 +221,35 @@ def refine_boundary_aware_xyxy(xyxy: Rect, max_size: Size) -> Rect:
         y2 = min(h, y2-y1)
         y1 = 0
 
+    off_x, off_y = get_rescaled_offset(feat_size, img_size)
+    diff_top = off_x-x1
+    if diff_top > 0:
+        x1 += diff_top 
+        x2 += diff_top 
+    diff_bottom = x2-(w-off_x)
+    if diff_bottom > 0:
+        x1 -= diff_bottom
+        x2 -= diff_bottom
+
+    diff_left = off_y-y1
+    if diff_left > 0:
+        y1 += diff_left 
+        y2 += diff_left 
+    diff_right = y2-(h-off_y)
+    if diff_right > 0:
+        y1 -= diff_right
+        y2 -= diff_right
+
     return x1,y1,x2,y2
 
-def get_candidate_bb(peaks_bb: Dict[Point, Rect], target_size: Size, max_size: Size = (256,256)) -> List[Rect]:
+def get_candidate_bb(peaks_bb: Dict[Point, Rect], target_size: Size, img_size: Size, feat_size: Size) -> List[Rect]:
     """[summary]
 
     Args:
         peaks_bb (Dict[Point, Rect]): peak-bb dict
         target_size (Size): target feature size, projected crop size 
-        max_size (Size, optional): Max feature size, size of model output. Defaults to (256,256).
+        img_size (Size): raw image size
+        feat_size (Size, optional): Max feature size, size of model output. Defaults to (256,256).
 
     Returns:
         List[Rect]: candidate crop in feature dimension
@@ -224,7 +258,7 @@ def get_candidate_bb(peaks_bb: Dict[Point, Rect], target_size: Size, max_size: S
     rects = []
     for (peak, bb) in peaks_bb.items():
         xyxy = refine_saliency_aware_xyxy(peak,bb,target_size)
-        xyxy = refine_boundary_aware_xyxy(xyxy, max_size)
+        xyxy = refine_boundary_aware_xyxy(xyxy, feat_size, img_size)
         rects.append(xyxy)
     return list(set(rects))
 
@@ -272,13 +306,15 @@ def rank_xyxy(candidate_xyxy: List[Rect], sal: Mat, seg: Mat) -> ScoreRect:
         scores_xyxy.append([total, xyxy])
     return sorted(scores_xyxy, reverse=True)
 
-def project_to_crop_size(scores_xyxy: ScoreRect, target_size: Size, crop_size: Size) -> ScoreRect:
+def project_to_crop_size(scores_xyxy: ScoreRect, target_size: Size, crop_size: Size, img_size: Size, feat_size: Size=(256,256)) -> ScoreRect:
     """ project the croping result in feature dimension to original image dimension
 
     Args:
         scores_xyxy (ScoreRect): results with box in feature dimension
         target_size (Size): target size in feature dimension
         crop_size (Size): original target croping size
+        img_size (Size): original image size
+        feat_size (Size, optional): feature map size, size of model output. Defaults to (256,256).
 
     Returns:
         ScoreRect: results with box in original dimension
@@ -288,8 +324,17 @@ def project_to_crop_size(scores_xyxy: ScoreRect, target_size: Size, crop_size: S
     w_ratio = w_crop / w
     h_ratio = h_crop / h
 
+    off_x, off_y = get_rescaled_offset(feat_size, img_size)
+
     def project_to_crop(xyxy):
         x1,y1,x2,y2 = xyxy
+        adj_x = min(off_x, x1)
+        adj_y = min(off_y, y1)
+        x1 -= adj_x
+        x2 -= adj_x
+        y1 -= adj_y
+        y2 -= adj_y
+        
         # print("Final Size [ORI]:", x2-x1, y2-y1)
         x1 = int(x1 * w_ratio)
         y1 = int(y1 * h_ratio)

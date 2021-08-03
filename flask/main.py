@@ -12,7 +12,7 @@ from io import BytesIO
 from flask import Flask
 from flask import request
 
-from deploy import loadModel, model_predict, get_peaksBB, crop, toSalSegBase64, decodeSalSegBase64, crop_b64, filter_candidate, project_to_crop_size, calculate_target_feature_size
+from deploy import calculate_target_feature_size_256, loadModel, model_predict, get_peaksBB, crop, toSalSegBase64, decodeSalSegBase64, crop_b64, filter_candidate, project_to_crop_size, calculate_target_feature_size_256
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -76,8 +76,7 @@ def predict():
 
             # crop
             h,w,_ = image.shape
-            h_feat, w_feat = seg.shape
-            target_size = calculate_target_feature_size((w,h), (w_feat,h_feat), crop_size)
+            target_size = calculate_target_feature_size_256((w,h), crop_size)
             scores_xyxy = crop(sal, seg, peaks_bb, target_size)
             scores_xyxy = filter_candidate(scores_xyxy, 0.1)
             scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size)
@@ -118,8 +117,7 @@ def sscrop():
             
             seg_sal_b64 = seg_sal_b64.split(',')[-1]
             sal, seg  = decodeSalSegBase64(seg_sal_b64)
-            h_feat, w_feat = seg.shape
-            target_size = calculate_target_feature_size(img_size, (w_feat,h_feat), crop_size)
+            target_size = calculate_target_feature_size_256(img_size, crop_size)
             scores_xyxy = crop(sal, seg, peaks_bb, target_size)
             scores_xyxy = filter_candidate(scores_xyxy, 0.1)
             scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size)
