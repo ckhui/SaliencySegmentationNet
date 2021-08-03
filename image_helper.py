@@ -308,7 +308,7 @@ def get_candidate_bb(peaks_bb: Dict[Point, Rect], target_size: Size, img_size: S
         rects.append(xyxy)
 
     mergeed_peaks_bb = merge_peaks_bb(peaks_bb, target_size)
-    print("MERGE", mergeed_peaks_bb)
+    # print("MERGE", mergeed_peaks_bb)
     for (peak, bb) in mergeed_peaks_bb.items():
         xyxy = refine_saliency_aware_xyxy(peak,bb,target_size)
         xyxy = refine_boundary_aware_xyxy(xyxy, feat_size, img_size)

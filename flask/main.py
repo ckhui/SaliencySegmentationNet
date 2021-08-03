@@ -76,10 +76,11 @@ def predict():
 
             # crop
             h,w,_ = image.shape
-            target_size = calculate_target_feature_size_256((w,h), crop_size)
-            scores_xyxy = crop(sal, seg, peaks_bb, target_size)
+            img_size = (w,h)
+            target_size = calculate_target_feature_size_256(img_size, crop_size)
+            scores_xyxy = crop(sal, seg, peaks_bb, target_size, img_size)
             scores_xyxy = filter_candidate(scores_xyxy, 0.1)
-            scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size)
+            scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size, img_size, (256,256))
             res_data['results'] = score2json(scores_xyxy)
             
             end = time.time()
@@ -114,13 +115,15 @@ def sscrop():
                 return response_builder(res_data)
             img_size = (img_w, img_h)
             crop_size = (crop_w, crop_h)
+
+            
             
             seg_sal_b64 = seg_sal_b64.split(',')[-1]
             sal, seg  = decodeSalSegBase64(seg_sal_b64)
             target_size = calculate_target_feature_size_256(img_size, crop_size)
-            scores_xyxy = crop(sal, seg, peaks_bb, target_size)
+            scores_xyxy = crop(sal, seg, peaks_bb, target_size, img_size)
             scores_xyxy = filter_candidate(scores_xyxy, 0.1)
-            scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size)
+            scores_xyxy = project_to_crop_size(scores_xyxy, target_size, crop_size, img_size, (256,256))
             res_data['results'] = score2json(scores_xyxy)
 
             end = time.time()
@@ -157,5 +160,5 @@ if __name__ == '__main__':
     print("Starting Server - Model Loaded")
     
     print("Server Started")
-    app.run(debug=True)
+    app.run(debug=False)
     
