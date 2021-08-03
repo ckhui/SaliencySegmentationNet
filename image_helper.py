@@ -148,6 +148,53 @@ def get_peaksBB(seg: Mat, sal: Mat) -> Dict[Point, Rect]:
 
     return peaks_bb
 
+def merge_bb(bb1: Rect, bb2:Rect) -> Rect:
+    a1,b1,c1,d1 = bb1
+    a2,b2,c2,d2 = bb2
+    a = min(a1,a2)
+    b = min(b1,b2)
+    c = max(c1,c2)
+    d = max(d1,d2)
+    return (a,b,c,d)
+
+def merge_pt(pt1: Point, pt2: Point) -> Point:
+    x = (pt1[0] + pt2[0])//2
+    y = (pt1[1] + pt2[1])//2
+    return (x,y)
+
+def merge_pt3(pt1: Point, pt2: Point, pt3: Point) -> Point:
+    x = (pt1[0] + pt2[0] + pt3[0])//3
+    y = (pt1[1] + pt2[1] + pt3[0])//3
+    return (x,y)
+    
+def within_size(bb, target_size):
+    w = bb[2] - bb[0] 
+    h = bb[3] - bb[1]
+    return w <= target_size[0] and h <= target_size[1]
+
+def merge_peaks_bb(peaks_bb: Dict[Point, Rect], target_size: Size) -> Dict[Point, Rect]:
+    peaks_bb_list = list(peaks_bb)
+    peaks_bb_list, len(peaks_bb_list)
+    peaks_count = len(peaks_bb_list)
+    merge_peaks_bb = {}
+    for a in range(0, peaks_count):
+        for b in range(a+1, peaks_count):
+            # print("TWO", a,b)
+            p1 = peaks_bb_list[a] 
+            p2 = peaks_bb_list[b]
+            key2 = merge_pt(p1,p2)
+            bb2 = merge_bb(peaks_bb[p1],peaks_bb[p2])
+            if within_size(bb2, target_size):
+                merge_peaks_bb[key2] = bb2
+            for c in range(b+1, peaks_count):
+                # print("THREE", a,b,c)
+                p3 = peaks_bb_list[c]
+                key3 = merge_pt3(p1,p2, p3)
+                bb3 = merge_bb(bb2, peaks_bb[p3])
+                if within_size(bb3, target_size):
+                    merge_peaks_bb[key3] = bb3
+    return merge_peaks_bb
+
 def refine_saliency_aware_xyxy(center: Point, bb: Rect, target_size: Size) -> Rect:
     """ refine saliency aware bounding box
 
@@ -180,7 +227,6 @@ def refine_saliency_aware_xyxy(center: Point, bb: Rect, target_size: Size) -> Re
         fill_y2 += (remainder_y+1)//2
 
     return cen_x-fill_x1, cen_y-fill_y1, cen_x+fill_x2, cen_y+fill_y2
-
 
 def get_rescaled_offset(feat_size: Size, img_size: Size) -> Tuple[int, int]:
     ratio = max(img_size[0] / feat_size[0], img_size[1] / feat_size[1])
@@ -260,6 +306,14 @@ def get_candidate_bb(peaks_bb: Dict[Point, Rect], target_size: Size, img_size: S
         xyxy = refine_saliency_aware_xyxy(peak,bb,target_size)
         xyxy = refine_boundary_aware_xyxy(xyxy, feat_size, img_size)
         rects.append(xyxy)
+
+    mergeed_peaks_bb = merge_peaks_bb(peaks_bb, target_size)
+    print("MERGE", mergeed_peaks_bb)
+    for (peak, bb) in mergeed_peaks_bb.items():
+        xyxy = refine_saliency_aware_xyxy(peak,bb,target_size)
+        xyxy = refine_boundary_aware_xyxy(xyxy, feat_size, img_size)
+        rects.append(xyxy)
+
     return list(set(rects))
 
 def normalize_salmap(mat: Mat) -> Mat:
@@ -334,7 +388,7 @@ def project_to_crop_size(scores_xyxy: ScoreRect, target_size: Size, crop_size: S
         x2 -= adj_x
         y1 -= adj_y
         y2 -= adj_y
-        
+
         # print("Final Size [ORI]:", x2-x1, y2-y1)
         x1 = int(x1 * w_ratio)
         y1 = int(y1 * h_ratio)
