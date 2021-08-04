@@ -32,7 +32,7 @@ def response_builder(res_data):
     response.status = 500 if 'err' in res_data else 200
     return response
 
-@app.route('/')
+@app.route('/api/')
 def hello():
     return f"Model is ready: {MODEL_WEIGHT}"
 
@@ -44,7 +44,7 @@ def test():
         print(request.files['input'])
     return "Hello"
 
-@app.route('/sspredict', methods=['POST'])
+@app.route('/api/sspredict', methods=['POST'])
 def predict():
     try: 
         if request.method == 'POST':
@@ -91,7 +91,7 @@ def predict():
     except Exception as err:
         return response_builder({'err': str(err)})
 
-@app.route('/sscrop', methods=['POST'])
+@app.route('/api/sscrop', methods=['POST'])
 def sscrop():
     try:
         if request.method == 'POST':
@@ -149,16 +149,14 @@ def score2json(score_xyxy):
         } for (score,xyxy) in score_xyxy]
     return score_data
         
-
-if __name__ == '__main__':
-    print("Starting Server - Loading Model")
-    torch.set_flush_denormal(True)
-    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')    
-    # MODEL_WEIGHT = "../../weights/SSNET_best.pth"
-    MODEL_WEIGHT = "../../weights/SSNET_ss_0.pth"
-    MODEL = loadModel(MODEL_WEIGHT, DEVICE)
-    print("Starting Server - Model Loaded")
+print("Starting Server - Loading Model")
+torch.set_flush_denormal(True)
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')   
+# MODEL_WEIGHT = "../../weights/SSNET_best.pth"
+MODEL_WEIGHT = "./SSNET_0.pth"
+MODEL = loadModel(MODEL_WEIGHT, DEVICE)
+print("Starting Server - Model Loaded")
     
-    print("Server Started")
-    app.run(debug=False)
+print("Server Started")
+#    app.run(debug=False)
     
