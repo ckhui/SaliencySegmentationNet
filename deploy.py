@@ -30,8 +30,9 @@ def postprocess_res2numpy(seg: torch.Tensor, sal: torch.Tensor) -> Tuple[Mat, Ma
     
     return seg_uint8, sal_uint8
 
-def model_predict(model: SSNet, img: Mat) -> Tuple[Mat, Mat]:
+def model_predict(model: SSNet, img: Mat, device: torch.device) -> Tuple[Mat, Mat]:
     img_tensor = image2tensor(img)
+    img_tensor.to(device)
     seg, sal = model.predict(img_tensor)
     seg, sal = postprocess_res2numpy(seg, sal)
 
@@ -67,9 +68,9 @@ def filter_candidate(scores_xyxy: np.ndarray, alpha: int = 0.1) -> np.ndarray:
     min_score = scores_xyxy[0][0]*alpha
     return [s for s in scores_xyxy if s[0] > min_score]    
 
-def predict_crop(model: SSNet, img: Mat, crop_size: Size):
+def predict_crop(model: SSNet, img: Mat, crop_size: Size, device: torch.device):
     ## model inferencing
-    seg, sal = model_predict(model, img)
+    seg, sal = model_predict(model, img, device)
 
     ## crop preprocessing
     peaks_bb = get_peaksBB(seg, sal)

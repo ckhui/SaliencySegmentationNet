@@ -68,7 +68,7 @@ def predict():
                 res_data['err'] = msg
                 return response_builder(res_data)
             res_data['img_info'] = msg
-            seg, sal = model_predict(MODEL, image)
+            seg, sal = model_predict(MODEL, image, DEVICE)
             salseg = toSalSegBase64(sal,seg)
             res_data['sal_seg'] = salseg
             peaks_bb = get_peaksBB(seg, sal)
